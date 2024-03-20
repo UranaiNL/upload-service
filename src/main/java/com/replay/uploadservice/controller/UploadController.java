@@ -17,7 +17,7 @@ public class UploadController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public String uploadReplay(@RequestParam("videoFile")MultipartFile videoFile){
+    public String uploadReplay(@RequestParam("videoFile") MultipartFile videoFile){
         return uploadService.uploadVideoFile(videoFile);
     }
 
