@@ -1,6 +1,7 @@
 package com.replay.uploadservice.service;
 
 
+import com.replay.uploadservice.dto.ReplayRequest;
 import com.replay.uploadservice.dto.UploadResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +11,8 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -21,7 +24,9 @@ import java.util.Objects;
 @Slf4j
 public class UploadService {
 
-    public String uploadVideoFile(MultipartFile videoFile){
+    private final WebClient.Builder webClientBuilder;
+
+    public String uploadReplay(MultipartFile videoFile, ReplayRequest replayRequest){
         Map<String, String> serverDetails = getServerDetails();
         try {
             // Prepare headers
@@ -57,7 +62,8 @@ public class UploadService {
                 System.out.println("Response body:" + Arrays.toString(response.getBody()));
                 if (uploadResponses != null && uploadResponses.length > 0) {
                     if(Objects.equals(uploadResponses[0].getFileStatus(), "OK")){
-                        return uploadResponses[0].getFileCode();
+                        replayRequest.setFileCode(uploadResponses[0].getFileCode());
+                        return createMetadata(replayRequest);
                     }
                     throw new Exception("UPLOAD STATUS: NOT OK!");
                 }
@@ -65,7 +71,7 @@ public class UploadService {
             }
             throw new Exception("HttpStatus not OK!");
         } catch (Exception e) {
-            return "Failed to upload file: " + e.getMessage();
+            return "Failed to upload replay: " + e.getMessage();
         }
     }
 
@@ -89,5 +95,26 @@ public class UploadService {
         }
         System.out.println(serverDetails);
         return serverDetails;
+    }
+
+    public String createMetadata(ReplayRequest replayRequest) throws Exception {
+        try {
+            ResponseEntity<String> responseEntity = webClientBuilder.build().post()
+                    .uri("http://replay-service/api/replay")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(BodyInserters.fromValue(replayRequest))
+                    .retrieve()
+                    .toEntity(String.class)
+                    .block();
+
+            assert responseEntity != null;
+            if (responseEntity.getStatusCode() == HttpStatus.CREATED) {
+                return responseEntity.getBody();
+            } else {
+                throw new Exception("Replay metadata wasn't stored! Status code: " + responseEntity.getStatusCode());
+            }
+        } catch (Exception e) {
+            throw new Exception(e.getMessage());
+        }
     }
 }
