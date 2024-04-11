@@ -3,9 +3,11 @@ package com.replay.uploadservice.service;
 
 import com.replay.uploadservice.dto.ReplayRequest;
 import com.replay.uploadservice.dto.UploadResponse;
+import com.replay.uploadservice.event.ReplayUploadedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -25,6 +27,7 @@ import java.util.Objects;
 public class UploadService {
 
     private final WebClient.Builder webClientBuilder;
+    private final KafkaTemplate<String, ReplayUploadedEvent> kafkaTemplate;
 
     public String uploadReplay(MultipartFile videoFile, ReplayRequest replayRequest){
         Map<String, String> serverDetails = getServerDetails();
@@ -63,7 +66,17 @@ public class UploadService {
                 if (uploadResponses != null && uploadResponses.length > 0) {
                     if(Objects.equals(uploadResponses[0].getFileStatus(), "OK")){
                         replayRequest.setFileCode(uploadResponses[0].getFileCode());
-                        return createMetadata(replayRequest);
+                        String metadata = createMetadata(replayRequest);
+                        ReplayUploadedEvent event = ReplayUploadedEvent.builder()
+                                .id(metadata)
+                                .uploaderId(replayRequest.getUploaderId())
+                                .p1Username(replayRequest.getP1Username())
+                                .p2Username(replayRequest.getP2Username())
+                                .p1CharacterId(replayRequest.getP1CharacterId())
+                                .p2CharacterId(replayRequest.getP2CharacterId())
+                                .build();
+                        kafkaTemplate.send("subscriptionTopic", event);
+                        return metadata;
                     }
                     throw new Exception("UPLOAD STATUS: NOT OK!");
                 }
