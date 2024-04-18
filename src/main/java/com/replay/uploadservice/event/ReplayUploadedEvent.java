@@ -1,14 +1,12 @@
 package com.replay.uploadservice.event;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
+@ToString
 public class ReplayUploadedEvent {
     private String id;
     private String uploaderId;

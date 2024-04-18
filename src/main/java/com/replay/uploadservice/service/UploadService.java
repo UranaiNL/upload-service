@@ -1,13 +1,14 @@
 package com.replay.uploadservice.service;
 
 
+import com.replay.uploadservice.config.RabbitMQConfig;
 import com.replay.uploadservice.dto.ReplayRequest;
 import com.replay.uploadservice.dto.UploadResponse;
 import com.replay.uploadservice.event.ReplayUploadedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.*;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -27,7 +28,7 @@ import java.util.Objects;
 public class UploadService {
 
     private final WebClient.Builder webClientBuilder;
-    private final KafkaTemplate<String, ReplayUploadedEvent> kafkaTemplate;
+    private final RabbitTemplate rabbitTemplate;
 
     public String uploadReplay(MultipartFile videoFile, ReplayRequest replayRequest){
         Map<String, String> serverDetails = getServerDetails();
@@ -75,7 +76,7 @@ public class UploadService {
                                 .p1CharacterId(replayRequest.getP1CharacterId())
                                 .p2CharacterId(replayRequest.getP2CharacterId())
                                 .build();
-                        kafkaTemplate.send("subscriptionTopic", event);
+                        rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY_UPLOAD, event);
                         return metadata;
                     }
                     throw new Exception("UPLOAD STATUS: NOT OK!");
