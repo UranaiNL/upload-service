@@ -1,14 +1,18 @@
 package com.replay.uploadservice.service;
 
 
+import com.google.auth.oauth2.ServiceAccountCredentials;
+import com.google.cloud.storage.*;
 import com.replay.uploadservice.config.RabbitMQConfig;
 import com.replay.uploadservice.dto.ReplayRequest;
+import com.replay.uploadservice.dto.UploadRequest;
 import com.replay.uploadservice.dto.UploadResponse;
 import com.replay.uploadservice.event.ReplayUploadedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.*;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -17,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -86,6 +91,48 @@ public class UploadService {
             throw new Exception("HttpStatus not OK!");
         } catch (Exception e) {
             return "Failed to upload replay: " + e.getMessage();
+        }
+    }
+
+    public String uploadReplayToCloud(UploadRequest uploadRequest) throws Exception {
+        // Environment Files
+        String projectId = System.getenv("PROJECT_ID");
+        String bucketName = System.getenv("BUCKET_NAME");
+
+        // Get the file name so we can use it later.
+        String fileName = uploadRequest.getVideo().getOriginalFilename();
+        assert fileName != null;
+
+        // Actual Upload Stuff
+        try (InputStream credentialsStream = getClass().getClassLoader().getResourceAsStream("gkey.json")) {
+            assert credentialsStream != null;
+            log.info(credentialsStream.toString());
+            Storage storage = StorageOptions.newBuilder()
+                    .setCredentials(ServiceAccountCredentials.fromStream(credentialsStream))
+                    .setProjectId(projectId)
+                    .build()
+                    .getService();
+            BlobId blobId = BlobId.of(bucketName, fileName);
+            BlobInfo blobInfo = BlobInfo.newBuilder(blobId).setContentType("video/mp4").build();
+
+            // Setting up basic preconditions.
+            Storage.BlobWriteOption precondition;
+            if (storage.get(bucketName, fileName) == null) {
+                // For a target object that does not yet exist, set the DoesNotExist precondition.
+                // This will cause the request to fail if the object is created before the request runs.
+                precondition = Storage.BlobWriteOption.doesNotExist();
+            } else {
+                // If the destination already exists in your bucket, instead set a generation-match
+                // precondition. This will cause the request to fail if the existing object's generation
+                // changes before the request runs.
+                precondition = Storage.BlobWriteOption.generationMatch(storage.get(bucketName, fileName).getGeneration());
+            }
+            Blob blob = storage.createFrom(blobInfo, uploadRequest.getVideo().getInputStream(), precondition);
+            log.info("File: " + fileName + "uploaded successfully to bucket:" + bucketName + "with identifier: ");
+            return blob.getBlobId().toGsUtilUriWithGeneration();
+        }
+        catch (Exception e){
+            throw new Exception(e.getMessage());
         }
     }
 
