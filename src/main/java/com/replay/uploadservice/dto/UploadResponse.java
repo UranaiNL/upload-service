@@ -11,9 +11,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class UploadResponse {
-    @JsonProperty("file_code")
-    private String fileCode;
-
-    @JsonProperty("file_status")
-    private String fileStatus;
+    @JsonProperty("public_url")
+    private String publicUrl;
 }

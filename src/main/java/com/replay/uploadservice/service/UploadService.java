@@ -1,31 +1,23 @@
 package com.replay.uploadservice.service;
 
 
+import com.google.api.gax.core.FixedCredentialsProvider;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
+import com.google.cloud.video.transcoder.v1.*;
 import com.replay.uploadservice.config.RabbitMQConfig;
-import com.replay.uploadservice.dto.ReplayRequest;
 import com.replay.uploadservice.dto.UploadRequest;
-import com.replay.uploadservice.dto.UploadResponse;
 import com.replay.uploadservice.event.ReplayUploadedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.*;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -35,130 +27,74 @@ public class UploadService {
     private final WebClient.Builder webClientBuilder;
     private final RabbitTemplate rabbitTemplate;
 
-    public String uploadReplay(MultipartFile videoFile, ReplayRequest replayRequest){
-        Map<String, String> serverDetails = getServerDetails();
-        try {
-            // Prepare headers
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-            // Prepare the request body
-            MultiValueMap<String, Object> requestBody = new LinkedMultiValueMap<>();
-            requestBody.add("sess_id", serverDetails.get("sess_id"));
-            requestBody.add("file_0", videoFile.getResource());
-
-            // Create the HTTP entity
-            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
-
-            // Define RestTemplate
-            RestTemplate restTemplate = new RestTemplate();
-
-            // Set up the url defined in the server details
-            String uploadUrl = (serverDetails.get("result") + "?upload_type=file&utype=reg");
-            System.out.println(uploadUrl);
-
-            // Make the POST request to the specified URL
-            ResponseEntity<UploadResponse[]> response = restTemplate.exchange(
-                    uploadUrl,
-                    HttpMethod.POST,
-                    requestEntity,
-                    UploadResponse[].class
-            );
-
-            // Check the response status
-            if (response.getStatusCode() == HttpStatus.OK) {
-                UploadResponse[] uploadResponses = response.getBody();
-                System.out.println("Response body:" + Arrays.toString(response.getBody()));
-                if (uploadResponses != null && uploadResponses.length > 0) {
-                    if(Objects.equals(uploadResponses[0].getFileStatus(), "OK")){
-                        replayRequest.setFileCode(uploadResponses[0].getFileCode());
-                        String metadata = createMetadata(replayRequest);
-                        ReplayUploadedEvent event = ReplayUploadedEvent.builder()
-                                .id(metadata)
-                                .uploaderId(replayRequest.getUploaderId())
-                                .p1Username(replayRequest.getP1Username())
-                                .p2Username(replayRequest.getP2Username())
-                                .p1CharacterId(replayRequest.getP1CharacterId())
-                                .p2CharacterId(replayRequest.getP2CharacterId())
-                                .build();
-                        rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY_UPLOAD, event);
-                        return metadata;
-                    }
-                    throw new Exception("UPLOAD STATUS: NOT OK!");
-                }
-                throw new Exception("Upload response was empty!");
-            }
-            throw new Exception("HttpStatus not OK!");
-        } catch (Exception e) {
-            return "Failed to upload replay: " + e.getMessage();
-        }
-    }
-
-    public String uploadReplayToCloud(UploadRequest uploadRequest) throws Exception {
+    public String[] uploadReplayToCloud(UploadRequest uploadRequest) throws Exception {
         // Environment Files
         String projectId = System.getenv("PROJECT_ID");
         String bucketName = System.getenv("BUCKET_NAME");
 
-        // Get the file name so we can use it later.
+        // Get the file name so we can use it later, also set up an inputname to the raw folder so we can use it.
         String fileName = uploadRequest.getVideo().getOriginalFilename();
         assert fileName != null;
+        String inputName = String.format("raw/%s", fileName);
 
         // Actual Upload Stuff
         try (InputStream credentialsStream = getClass().getClassLoader().getResourceAsStream("gkey.json")) {
             assert credentialsStream != null;
-            log.info(credentialsStream.toString());
+            // log.info(credentialsStream.toString());
             Storage storage = StorageOptions.newBuilder()
                     .setCredentials(ServiceAccountCredentials.fromStream(credentialsStream))
                     .setProjectId(projectId)
                     .build()
                     .getService();
-            BlobId blobId = BlobId.of(bucketName, fileName);
+            BlobId blobId = BlobId.of(bucketName, inputName);
             BlobInfo blobInfo = BlobInfo.newBuilder(blobId).setContentType("video/mp4").build();
 
             // Setting up basic preconditions.
             Storage.BlobWriteOption precondition;
-            if (storage.get(bucketName, fileName) == null) {
+            if (storage.get(bucketName, inputName) == null) {
                 // For a target object that does not yet exist, set the DoesNotExist precondition.
-                // This will cause the request to fail if the object is created before the request runs.
                 precondition = Storage.BlobWriteOption.doesNotExist();
             } else {
-                // If the destination already exists in your bucket, instead set a generation-match
-                // precondition. This will cause the request to fail if the existing object's generation
-                // changes before the request runs.
-                precondition = Storage.BlobWriteOption.generationMatch(storage.get(bucketName, fileName).getGeneration());
+                // If the destination already exists in your bucket, instead set a generation-match precondition.
+                precondition = Storage.BlobWriteOption.generationMatch(storage.get(bucketName, inputName).getGeneration());
             }
+
+            // Create the storage object
             Blob blob = storage.createFrom(blobInfo, uploadRequest.getVideo().getInputStream(), precondition);
-            log.info("File: " + fileName + "uploaded successfully to bucket:" + bucketName + "with identifier: ");
-            return blob.getBlobId().toGsUtilUriWithGeneration();
-        }
-        catch (Exception e){
+            assert blob != null;
+            log.info("File: " + fileName + "uploaded to bucket:" + bucketName + " successfully!");
+
+            // Get the url and uri for other services
+
+            String publicUrl = String.format("https://storage.googleapis.com/%s/transcoded/%s", bucketName, fileName);
+            String inputUri = String.format("gs://%s/%s", bucketName, inputName);
+            log.info("InputURI: " + inputUri);
+
+            // Rabbit communication
+            ReplayUploadedEvent event = ReplayUploadedEvent.builder()
+                    .uploaderId(uploadRequest.getUploaderId())
+                    .publicUrl(publicUrl)
+                    .p1Username(uploadRequest.getP1Username())
+                    .p2Username(uploadRequest.getP2Username())
+                    .p1CharacterId(uploadRequest.getP1CharacterId())
+                    .p2CharacterId(uploadRequest.getP2CharacterId())
+                    .gameId(uploadRequest.getGameId())
+                    .build();
+            rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY_UPLOAD, event);
+
+            // TODO: Make this all a fanout event for the different services
+            String metadata = createMetadata(event);
+            String jobStarted = startTranscodeJob(fileName, inputUri);
+            return new String[]{
+                    metadata,
+                    jobStarted,
+            };
+        } catch (Exception e) {
             throw new Exception(e.getMessage());
         }
     }
 
-    public Map<String, String> getServerDetails(){
-        RestTemplate serverDetailsTemplate = new RestTemplate();
-        ResponseEntity<Map> serverDetailsResponse = serverDetailsTemplate.exchange(
-                "https://mp4upload.com/api/upload/server?key=458798pdjkypeei8tual7e",
-                HttpMethod.GET,
-                null,
-                Map.class
-        );
-
-        Map<String, String> serverDetails = new HashMap<>();
-
-        if(serverDetailsResponse.getStatusCode().is2xxSuccessful()){
-            Map responseBody = serverDetailsResponse.getBody();
-            if(responseBody != null){
-                serverDetails.put("sess_id", (String) responseBody.get("sess_id"));
-                serverDetails.put("result", (String) responseBody.get("result"));
-            }
-        }
-        System.out.println(serverDetails);
-        return serverDetails;
-    }
-
-    public String createMetadata(ReplayRequest replayRequest) throws Exception {
+    public String createMetadata(ReplayUploadedEvent replayRequest) throws Exception {
         try {
             ResponseEntity<String> responseEntity = webClientBuilder.build().post()
                     .uri("http://replay-service/api/replay")
@@ -176,6 +112,43 @@ public class UploadService {
             }
         } catch (Exception e) {
             throw new Exception(e.getMessage());
+        }
+    }
+
+    public String startTranscodeJob(String fileName, String inputUri) {
+        String projectId = System.getenv("PROJECT_ID");
+        String bucketName = System.getenv("BUCKET_NAME");
+        String location = System.getenv("LOCATION");
+        String preset = "preset/web-hd";
+        String outputUri = String.format("gs://%s/transcoded/%s/", bucketName, fileName);
+        log.info("OutputURI: " + outputUri);
+        try (InputStream credentialsStream = getClass().getClassLoader().getResourceAsStream("gkey.json")) {
+            assert credentialsStream != null;
+
+            // Authenticate the TranscoderServiceClient
+            TranscoderServiceSettings settings = TranscoderServiceSettings.newBuilder()
+                    .setCredentialsProvider(FixedCredentialsProvider.create(ServiceAccountCredentials.fromStream(credentialsStream)))
+                    .build();
+
+            // Build and create the job.
+            try (TranscoderServiceClient transcoderServiceClient = TranscoderServiceClient.create(settings)) {
+                CreateJobRequest createJobRequest = CreateJobRequest.newBuilder()
+                        .setJob(Job.newBuilder()
+                                .setInputUri(inputUri)
+                                .setOutputUri(outputUri)
+                                .setTemplateId(preset)
+                                .build())
+                        .setParent(LocationName.of(projectId, location).toString())
+                        .build();
+
+                // Send the job creation request and process the response.
+                Job job = transcoderServiceClient.createJob(createJobRequest);
+                String message = "Transcode job started: " + job.getName() + " with state: " + job.getState();
+                System.out.println(message);
+                return message;
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }

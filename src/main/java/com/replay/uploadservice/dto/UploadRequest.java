@@ -1,6 +1,5 @@
 package com.replay.uploadservice.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +17,5 @@ public class UploadRequest {
     private String p1CharacterId;
     private String p2CharacterId;
     private String gameId;
-
-    @JsonIgnore
     private MultipartFile video;
 }
