@@ -65,7 +65,6 @@ public class UploadService {
             log.info("File: " + fileName + "uploaded to bucket:" + bucketName + " successfully!");
 
             // Get the url and uri for other services
-
             String publicUrl = String.format("https://storage.googleapis.com/%s/transcoded/%s", bucketName, fileName);
             String inputUri = String.format("gs://%s/%s", bucketName, inputName);
             log.info("InputURI: " + inputUri);
@@ -82,7 +81,6 @@ public class UploadService {
                     .build();
             rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY_UPLOAD, event);
 
-            // TODO: Make this all a fanout event for the different services
             String metadata = createMetadata(event);
             String jobStarted = startTranscodeJob(fileName, inputUri);
             return new String[]{
