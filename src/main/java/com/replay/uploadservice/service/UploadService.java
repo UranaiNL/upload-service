@@ -65,7 +65,7 @@ public class UploadService {
             log.info("File: " + fileName + "uploaded to bucket:" + bucketName + " successfully!");
 
             // Get the url and uri for other services
-            String publicUrl = String.format("https://storage.googleapis.com/%s/transcoded/%s", bucketName, fileName);
+            String publicUrl = String.format("https://storage.googleapis.com/%s/transcoded/%s/manifest.mpd", bucketName, fileName);
             String inputUri = String.format("gs://%s/%s", bucketName, inputName);
             log.info("InputURI: " + inputUri);
 
