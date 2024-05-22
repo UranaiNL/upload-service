@@ -12,21 +12,42 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
     public static final String REPLAY_EXCHANGE = "replay_exchange";
     public static final String REPLAY_QUEUE = "replay_queue";
-    public static final String REPLAY_ROUTING_KEY_UPLOAD = "replay_routingKey_upload";
+
+    public static final String REPLAY_ROUTING_KEY = "replay_routingKey";
+
+    public static final String SUBSCRIPTION_EXCHANGE = "subscription_exchange";
+    public static final String SUBSCRIPTION_QUEUE = "subscription_queue";
+
+    public static final String SUBSCRIPTION_ROUTING_KEY = "subscription_routingKey";
 
     @Bean
-    public Queue queue(){
+    public Queue replayQueue(){
         return new Queue(REPLAY_QUEUE);
     }
 
     @Bean
-    public TopicExchange exchange(){
+    public TopicExchange replayExchange(){
         return new TopicExchange(REPLAY_EXCHANGE);
     }
 
     @Bean
-    public Binding binding(Queue queue, TopicExchange exchange){
-        return BindingBuilder.bind(queue).to(exchange).with(REPLAY_ROUTING_KEY_UPLOAD);
+    public Binding replayBinding(Queue replayQueue, TopicExchange replayExchange){
+        return BindingBuilder.bind(replayQueue).to(replayExchange).with(REPLAY_ROUTING_KEY);
+    }
+
+    @Bean
+    public Queue subscriptionQueue(){
+        return new Queue(SUBSCRIPTION_QUEUE);
+    }
+
+    @Bean
+    public TopicExchange subscriptionExchange(){
+        return new TopicExchange(SUBSCRIPTION_EXCHANGE);
+    }
+
+    @Bean
+    public Binding subscriptionBinding(Queue subscriptionQueue, TopicExchange subscriptionExchange){
+        return BindingBuilder.bind(subscriptionQueue).to(subscriptionExchange).with(SUBSCRIPTION_ROUTING_KEY);
     }
 
     @Bean

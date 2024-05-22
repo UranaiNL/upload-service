@@ -1,22 +1,15 @@
 package com.replay.uploadservice.service;
 
-
-import com.google.api.gax.core.FixedCredentialsProvider;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
-import com.google.cloud.video.transcoder.v1.*;
 import com.replay.uploadservice.config.RabbitMQConfig;
 import com.replay.uploadservice.dto.UploadRequest;
 import com.replay.uploadservice.event.ReplayUploadedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.client.WebClient;
 
-import java.io.IOException;
 import java.io.InputStream;
 
 @Service
@@ -24,10 +17,9 @@ import java.io.InputStream;
 @Slf4j
 public class UploadService {
 
-    private final WebClient.Builder webClientBuilder;
     private final RabbitTemplate rabbitTemplate;
 
-    public String[] uploadReplayToCloud(UploadRequest uploadRequest) throws Exception {
+    public String uploadReplayToCloud(UploadRequest uploadRequest) throws Exception {
         // Environment Files
         String projectId = System.getenv("PROJECT_ID");
         String bucketName = System.getenv("BUCKET_NAME");
@@ -79,74 +71,11 @@ public class UploadService {
                     .p2CharacterId(uploadRequest.getP2CharacterId())
                     .gameId(uploadRequest.getGameId())
                     .build();
-            rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY_UPLOAD, event);
-
-            String metadata = createMetadata(event);
-            String jobStarted = startTranscodeJob(fileName, inputUri);
-            return new String[]{
-                    metadata,
-                    jobStarted,
-            };
+            rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY, event);
+            rabbitTemplate.convertAndSend(RabbitMQConfig.SUBSCRIPTION_EXCHANGE, RabbitMQConfig.SUBSCRIPTION_ROUTING_KEY, event);
+            return publicUrl;
         } catch (Exception e) {
             throw new Exception(e.getMessage());
-        }
-    }
-
-    public String createMetadata(ReplayUploadedEvent replayRequest) throws Exception {
-        try {
-            ResponseEntity<String> responseEntity = webClientBuilder.build().post()
-                    .uri("http://replay-service/api/replay")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(BodyInserters.fromValue(replayRequest))
-                    .retrieve()
-                    .toEntity(String.class)
-                    .block();
-
-            assert responseEntity != null;
-            if (responseEntity.getStatusCode() == HttpStatus.CREATED) {
-                return responseEntity.getBody();
-            } else {
-                throw new Exception("Replay metadata wasn't stored! Status code: " + responseEntity.getStatusCode());
-            }
-        } catch (Exception e) {
-            throw new Exception(e.getMessage());
-        }
-    }
-
-    public String startTranscodeJob(String fileName, String inputUri) {
-        String projectId = System.getenv("PROJECT_ID");
-        String bucketName = System.getenv("BUCKET_NAME");
-        String location = System.getenv("LOCATION");
-        String preset = "preset/web-hd";
-        String outputUri = String.format("gs://%s/transcoded/%s/", bucketName, fileName);
-        log.info("OutputURI: " + outputUri);
-        try (InputStream credentialsStream = getClass().getClassLoader().getResourceAsStream("gkey.json")) {
-            assert credentialsStream != null;
-
-            // Authenticate the TranscoderServiceClient
-            TranscoderServiceSettings settings = TranscoderServiceSettings.newBuilder()
-                    .setCredentialsProvider(FixedCredentialsProvider.create(ServiceAccountCredentials.fromStream(credentialsStream)))
-                    .build();
-
-            // Build and create the job.
-            try (TranscoderServiceClient transcoderServiceClient = TranscoderServiceClient.create(settings)) {
-                CreateJobRequest createJobRequest = CreateJobRequest.newBuilder()
-                        .setJob(Job.newBuilder()
-                                .setInputUri(inputUri)
-                                .setOutputUri(outputUri)
-                                .setTemplateId(preset)
-                                .build())
-                        .setParent(LocationName.of(projectId, location).toString())
-                        .build();
-
-                // Send the job creation request and process the response.
-                Job job = transcoderServiceClient.createJob(createJobRequest);
-                String message = "Transcode job started: " + job.getName() + " with state: " + job.getState();
-                System.out.println(message);
-                return message;
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 }

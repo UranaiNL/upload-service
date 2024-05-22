@@ -18,7 +18,7 @@ public class UploadController {
 
     @PostMapping()
     @ResponseStatus(HttpStatus.OK)
-    public String[] uploadReplayToCloud(HttpServletRequest request) throws Exception {
+    public String uploadReplayToCloud(HttpServletRequest request) throws Exception {
         MultipartFile video = ((MultipartHttpServletRequest) request).getFile("video");
         UploadRequest uploadRequest = new UploadRequest();
         uploadRequest.setUploaderId(request.getParameter("uploaderId"));
