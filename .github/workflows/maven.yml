@@ -53,14 +53,13 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
-      # Configure Docker with Credentials
-      - name: Authorize Docker push
-        run: gcloud auth configure-docker
+      # Configure GCR with Credentials
+      - name: Authenticate with GCR
+        run: echo "${{ secrets.GCP_SA_KEY }}" | base64 --decode > ${HOME}/gcp-key.json && gcloud auth activate-service-account --key-file=${HOME}/gcp-key.json && gcloud auth configure-docker
 
-      - name: Build and Push Container
-        run: |-
-          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{  github.sha }} .
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{  github.sha }}
+      - name: Build and Push Container with Jib
+        run: mvn compile jib:build -Dimage=gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE }}:${{ github.sha }}
+
       - name: Deploy to Cloud Run
         id: gohibeesh
         run: gcloud run deploy ${{env.SERVICE}} --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{  github.sha }} --port ${{env.PORT}} --region ${{env.REGION}} --cpu=1 --memory=1Gi --timeout=3000 --allow-unauthenticated || true
