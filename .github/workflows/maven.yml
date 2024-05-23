@@ -53,9 +53,6 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
-      # Configure GCR with Credentials
-      - name: Authenticate with GCR
-        run: echo "${{ secrets.GCP_SA_KEY }}" | base64 --decode > ${HOME}/gcp-key.json && gcloud auth activate-service-account --key-file=${HOME}/gcp-key.json && gcloud auth configure-docker
 
       - name: Build and Push Container with Jib
         run: mvn compile jib:build -Dimage=gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.SERVICE }}:${{ github.sha }}
