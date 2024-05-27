@@ -41,7 +41,7 @@ jobs:
     env:
       PROJECT_ID: re-play-420511
       SERVICE: upload-service
-      PORT: 0
+      PORT: 8091
       REGION: europe-west4
     steps:
       - name: Checkout
