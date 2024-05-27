@@ -133,11 +133,6 @@
 					<to>
 						<image>noahtenoever/${project.artifactId}</image>
 					</to>
-					<container>
-						<jvmFlags>
-							<jvmFlag>-Dspring.config.location=/src/main/resources/application-docker.properties</jvmFlag>
-						</jvmFlags>
-					</container>
 				</configuration>
 				<executions>
 					<execution>
