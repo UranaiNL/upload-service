@@ -135,7 +135,7 @@
 					</to>
 					<container>
 						<jvmFlags>
-							<jvmFlag>-Dspring.config.location=src/main/resources/application-docker.properties</jvmFlag>
+							<jvmFlag>-Dspring.config.location=/src/main/resources/application-docker.properties</jvmFlag>
 						</jvmFlags>
 					</container>
 				</configuration>
