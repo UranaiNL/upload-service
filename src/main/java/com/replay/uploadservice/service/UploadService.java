@@ -32,7 +32,7 @@ public class UploadService {
         // Actual Upload Stuff
         try (InputStream credentialsStream = getClass().getClassLoader().getResourceAsStream("gkey.json")) {
             assert credentialsStream != null;
-            // log.info(credentialsStream.toString());
+            log.info(credentialsStream.toString());
             Storage storage = StorageOptions.newBuilder()
                     .setCredentials(ServiceAccountCredentials.fromStream(credentialsStream))
                     .setProjectId(projectId)
