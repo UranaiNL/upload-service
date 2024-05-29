@@ -4,6 +4,7 @@ import com.replay.uploadservice.dto.UploadRequest;
 import com.replay.uploadservice.service.UploadService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,5 +30,12 @@ public class UploadController {
         uploadRequest.setGameId(request.getParameter("gameId"));
         uploadRequest.setVideo(video);
         return uploadService.uploadReplayToCloud(uploadRequest);
+    }
+
+    @GetMapping
+    @ResponseStatus(HttpStatus.OK)
+    @RabbitListener(queues = "replay_queue")
+    public String testConnection(){
+        return "Connected";
     }
 }
