@@ -123,6 +123,21 @@
 					<to>
 						<image>noahtenoever/${project.artifactId}</image>
 					</to>
+					<extraDirectories>
+						<paths>
+							<path>
+								<from>src/main/resources</from>
+								<into>/app/resources</into>
+							</path>
+						</paths>
+					</extraDirectories>
+					<container>
+						<jvmFlags>
+							<jvmFlag>-cp</jvmFlag>
+							<jvmFlag>/app/resources:.</jvmFlag>
+						</jvmFlags>
+						<mainClass>com.replay.uploadservice.UploadServiceApplication</mainClass>
+					</container>
 				</configuration>
 				<executions>
 					<execution>
