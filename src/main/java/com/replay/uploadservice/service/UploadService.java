@@ -23,6 +23,7 @@ public class UploadService {
         // Environment Files
         String projectId = System.getenv("PROJECT_ID");
         String bucketName = System.getenv("BUCKET_NAME");
+        log.info(projectId, " is the id & the bucket is" , bucketName);
 
         // Get the file name so we can use it later, also set up an inputname to the raw folder so we can use it.
         String fileName = uploadRequest.getVideo().getOriginalFilename();
@@ -31,6 +32,7 @@ public class UploadService {
 
         // Actual Upload Stuff
         try (InputStream credentialsStream = getClass().getClassLoader().getResourceAsStream("gkey.json")) {
+            log.warn("Trying to get the credential stream!");
             assert credentialsStream != null;
             log.info(credentialsStream.toString());
             Storage storage = StorageOptions.newBuilder()
