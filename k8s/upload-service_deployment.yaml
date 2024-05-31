@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: upload-service-dep
+  labels:
+    app: upload-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: upload-service
+  template:
+    metadata:
+      labels:
+        app: upload-service
+    spec:
+      containers:
+        - name: upload-service
+          image: noahtenoever/upload-service:latest
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: gkey-volume
+              mountPath: /app/resources/gkey.json
+              subPath: gkey.json
+          ports:
+            - containerPort: 8081
+          env:
+            - name: PROJECT_ID
+              value: "re-play-420511"
+            - name: BUCKET_NAME
+              value: "replay_upload_database"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+      volumes:
+        - name: gkey-volume
+          secret:
+            secretName: gkey-secret
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: upload-service
+spec:
+  scaleTargetRef:
+    kind: Deployment
+    name: upload-service
+  maxReplicas: 3
+  minReplicas: 1
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: upload-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8081
+      targetPort: 8081
+  selector:
+    app: upload-service
