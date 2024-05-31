@@ -1,5 +1,6 @@
 package com.replay.uploadservice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
 import com.replay.uploadservice.config.RabbitMQConfig;
@@ -18,6 +19,7 @@ import java.io.InputStream;
 public class UploadService {
 
     private final RabbitTemplate rabbitTemplate;
+    private final ObjectMapper objectMapper;
 
     public String uploadReplayToCloud(UploadRequest uploadRequest) throws Exception {
         // Environment Files
@@ -73,8 +75,11 @@ public class UploadService {
                     .p2CharacterId(uploadRequest.getP2CharacterId())
                     .gameId(uploadRequest.getGameId())
                     .build();
-            rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY, event);
-            rabbitTemplate.convertAndSend(RabbitMQConfig.SUBSCRIPTION_EXCHANGE, RabbitMQConfig.SUBSCRIPTION_ROUTING_KEY, event);
+
+            String eventJson = objectMapper.writeValueAsString(event);
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY, eventJson);
+            rabbitTemplate.convertAndSend(RabbitMQConfig.SUBSCRIPTION_EXCHANGE, RabbitMQConfig.SUBSCRIPTION_ROUTING_KEY, eventJson);
             return publicUrl;
         } catch (Exception e) {
             throw new Exception(e.getMessage());
