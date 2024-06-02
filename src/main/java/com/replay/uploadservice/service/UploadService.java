@@ -1,5 +1,6 @@
 package com.replay.uploadservice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
 import com.replay.uploadservice.config.RabbitMQConfig;
@@ -8,6 +9,8 @@ import com.replay.uploadservice.event.ReplayUploadedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.AmqpTemplate;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -74,8 +77,15 @@ public class UploadService {
                     .gameId(uploadRequest.getGameId())
                     .build();
 
-            rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY, event);
-            rabbitTemplate.convertAndSend(RabbitMQConfig.SUBSCRIPTION_EXCHANGE, RabbitMQConfig.SUBSCRIPTION_ROUTING_KEY, event);
+            ObjectMapper objectMapper = new ObjectMapper();
+            MessageProperties messageProperties = new MessageProperties();
+            messageProperties.setContentType("application/json");
+            messageProperties.setContentEncoding("UTF-8");
+            Message msg = new Message(objectMapper.writeValueAsBytes(event), messageProperties);
+
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.REPLAY_EXCHANGE, RabbitMQConfig.REPLAY_ROUTING_KEY, msg);
+            rabbitTemplate.convertAndSend(RabbitMQConfig.SUBSCRIPTION_EXCHANGE, RabbitMQConfig.SUBSCRIPTION_ROUTING_KEY, msg);
             return publicUrl;
         } catch (Exception e) {
             throw new Exception(e.getMessage());
