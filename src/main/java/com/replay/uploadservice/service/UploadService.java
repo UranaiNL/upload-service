@@ -63,7 +63,7 @@ public class UploadService {
             String inputUri = String.format("gs://%s/%s", bucketName, inputName);
             log.info("InputURI: " + inputUri);
 
-            // Rabbit communication
+            // Rabbit communication channel
             ReplayUploadedEvent event = ReplayUploadedEvent.builder()
                     .uploaderId(uploadRequest.getUploaderId())
                     .publicUrl(publicUrl)
