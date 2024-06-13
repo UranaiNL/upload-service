@@ -28,7 +28,7 @@ public class UploadService {
         String bucketName = System.getenv("BUCKET_NAME");
         log.info(projectId, " is the id & the bucket is" , bucketName);
 
-        // Get the file name so we can use it later, also set up an inputname to the raw folder so we can use it.
+        // Get the file name, so we can use it later, also set up an input name to the raw folder so we can use it.
         String fileName = uploadRequest.getVideo().getOriginalFilename();
         assert fileName != null;
         String inputName = String.format("raw/%s", fileName);
@@ -59,12 +59,12 @@ public class UploadService {
             // Create the storage object
             Blob blob = storage.createFrom(blobInfo, uploadRequest.getVideo().getInputStream(), precondition);
             assert blob != null;
-            log.info("File: " + fileName + "uploaded to bucket:" + bucketName + " successfully!");
+            log.info("File: {}uploaded to bucket:{} successfully!", fileName, bucketName);
 
             // Get the url and uri for other services
             String publicUrl = String.format("https://storage.googleapis.com/%s/transcoded/%s/manifest.mpd", bucketName, fileName);
             String inputUri = String.format("gs://%s/%s", bucketName, inputName);
-            log.info("InputURI: " + inputUri);
+            log.info("InputURI: {}", inputUri);
 
             // Rabbit communication channel
             ReplayUploadedEvent event = ReplayUploadedEvent.builder()

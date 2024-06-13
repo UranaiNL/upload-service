@@ -1,0 +1,42 @@
+config:
+  target: http://localhost:8081
+  processor: "processor.js"
+  phases:
+    - name: "Warm up service"
+      duration: 90
+      arrivalRate: 0.5  # Reduced arrival rate for 0.5 requests/second
+      rampTo: 10
+    - name: "Ramp up high load"
+      duration: 210
+      arrivalRate: 1  # Reduced arrival rate for 1 request/second
+      rampTo: 20
+    - name: "Sustained high load"
+      duration: 300
+      arrivalRate: 2  # Reduced arrival rate for 2 requests/second
+      rampTo: 30
+  ensure:
+    maxErrorRate: 1
+  payload:
+    path: 'mock_data.csv'
+    fields:
+      - 'uploaderId'
+      - 'p1Username'
+      - 'p2Username'
+      - 'p1CharacterId'
+      - 'p2CharacterId'
+      - 'gameId'
+    skipHeader: true
+
+scenarios:
+  - name: "Upload new video and get it"
+    flow:
+      - post:
+          url: "/api/upload"
+          beforeRequest: "setupMultipartFormDataWithFile"
+          formData:
+            uploaderId: "{{ uploaderId }}"
+            p1Username: "{{ p1Username }}"
+            p2Username: "{{ p2Username }}"
+            p1CharacterId: "{{ p1CharacterId }}"
+            p2CharacterId: "{{ p2CharacterId }}"
+            gameId: "{{ gameId }}"
